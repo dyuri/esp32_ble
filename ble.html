@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>BLE test</title>
+</head>
+<body>
+  <input id="blevalue" value="">
+  <button id="readbtn" type="button">Read</button>
+  <button id="writebtn" type="button">Write</button>
+  <p id="fromnotif">
+  </p>
+<script>
+var myDescriptor;
+
+document.getElementById("readbtn").addEventListener('click', e => {
+  onReadButtonClick();
+});
+
+document.getElementById("writebtn").addEventListener('click', e => {
+  onWriteButtonClick();
+});
+
+const log = msg => console.log(msg);
+
+function ab2str(buf) {
+  return String.fromCharCode.apply(null, new Uint8Array(buf));
+}
+
+function str2ab(str) {
+  var buf = new ArrayBuffer(str.length);
+  var bufView = new Uint8Array(buf);
+  for (var i=0, strLen=str.length; i < strLen; i++) {
+    bufView[i] = str.charCodeAt(i);
+  }
+  return buf;
+}
+
+let characteristic = null;
+const blevalue = document.getElementById('blevalue');
+
+const handleCharacteristicValueChange = e => {
+  let el = document.getElementById('fromnotif');
+
+  el.innerHTML = ab2str(e.target.value.buffer);
+};
+
+async function onReadButtonClick() {
+  let serviceUuid = "4fafc201-1fb5-459e-8fcc-c5c9c331914a";
+  let characteristicUuid = "beb5483e-36e1-4688-b7f5-ea07361b26a0";
+
+  try {
+    if (!characteristic) {
+      log('Requesting Bluetooth Device...');
+      const device = await navigator.bluetooth.requestDevice({
+        filters: [{services: [serviceUuid]}]});
+
+      log('Connecting to GATT Server...');
+      const server = await device.gatt.connect();
+
+      log('Getting Service...');
+      const service = await server.getPrimaryService(serviceUuid);
+
+      log('Getting Characteristic...');
+      characteristic = await service.getCharacteristic(characteristicUuid);
+
+      log('> Characteristic UUID:  ' + characteristic.uuid);
+      log('> Broadcast:            ' + characteristic.properties.broadcast);
+      log('> Read:                 ' + characteristic.properties.read);
+      log('> Write w/o response:   ' +
+        characteristic.properties.writeWithoutResponse);
+      log('> Write:                ' + characteristic.properties.write);
+      log('> Notify:               ' + characteristic.properties.notify);
+      log('> Indicate:             ' + characteristic.properties.indicate);
+      log('> Signed Write:         ' +
+        characteristic.properties.authenticatedSignedWrites);
+      log('> Queued Write:         ' + characteristic.properties.reliableWrite);
+      log('> Writable Auxiliaries: ' +
+        characteristic.properties.writableAuxiliaries);
+
+      // value change listener
+      await characteristic.startNotifications();
+      characteristic.addEventListener('characteristicvaluechanged', handleCharacteristicValueChange);
+    }
+    blevalue.value = ab2str((await characteristic.readValue()).buffer);
+  } catch(error) {
+    log('Argh! ' + error);
+  }
+}
+
+async function onWriteButtonClick() {
+  if (characteristic) {
+    characteristic.writeValue(str2ab(blevalue.value));
+  } else {
+    console.warn("No characteristic found!");
+  }
+}
+</script>
+</body>
+</html>
